@@ -2,16 +2,19 @@
 
 
 [[projects]]
-  digest = "1:b8a91524c7e262bcf2fde6e6bdcebfcaa6450ad073af6df6301fd5f6c32a838b"
-  name = "github.com/moovweb/rubex"
-  packages = ["."]
+  digest = "1:72dc2b6056e7097f829260e4a2ff08d32fec6017df1982a66e110ab4128486f8"
+  name = "github.com/dlclark/regexp2"
+  packages = [
+    ".",
+    "syntax",
+  ]
   pruneopts = "UT"
-  revision = "cb849acea6148000db8a55743f71476b0897ea41"
-  version = "6.3.107"
+  revision = "487489b64fb796de2e55f4e8a4ad1e145f80e957"
+  version = "v1.1.6"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = ["github.com/moovweb/rubex"]
+  input-imports = ["github.com/dlclark/regexp2"]
   solver-name = "gps-cdcl"
   solver-version = 1
