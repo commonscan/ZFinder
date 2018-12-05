@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/dlclark/regexp2"
+	"github.com/deckarep/golang-set"
 	"log"
 	"net"
 	"regexp"
@@ -41,7 +41,7 @@ func init() {
 }
 
 func Detect(ip, port string) (DetectPlugin, error) {
-	conn, err := net.Dial("tcp", ip+":"+port)
+	conn, err := net.DialTimeout("tcp", ip+":"+port, 5*time.Second)
 	var buffer = make([]byte, 1024)
 	if err != nil {
 		return DetectPlugin{}, errors.New("connect failed")
@@ -56,7 +56,7 @@ func Detect(ip, port string) (DetectPlugin, error) {
 			return DetectPlugin{}, errors.New("connect failed")
 		}
 		for _, regex := range plugin.RegexpList {
-			if (regex.Find(buffer[0:n]) != nil) {
+			if regex.Find(buffer[0:n]) != nil {
 				return plugin, nil
 			}
 		}
@@ -64,14 +64,14 @@ func Detect(ip, port string) (DetectPlugin, error) {
 	return DetectPlugin{}, errors.New("Do not know")
 }
 
-func detectProbe(ip, port string, probe Probe, DefaultServices []Service) {
+func detectProbe(ip, port string, probe Probe) ([]byte, error) {
 	p, err := strconv.Atoi(port)
 	if IntInSlice(p, probe.Ports) {
-		return
+		return nil, err
 	}
-	conn, err := net.Dial("tcp", ip+":"+port)
+	conn, err := net.DialTimeout("tcp", ip+":"+port, 5*time.Second)
 	if err != nil {
-		return
+		return nil, err
 	}
 	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -84,46 +84,36 @@ func detectProbe(ip, port string, probe Probe, DefaultServices []Service) {
 	probe.HelloString = strings.Replace(probe.HelloString, "\\n", "\n", -1)
 	n, err := conn.Write([]byte(probe.HelloString))
 	if err != nil {
-		return
+		return nil, err
 	}
 	n, err = conn.Read(buffer)
 	if err != nil {
 		//fmt.Println(err)
-		return
+		return nil, err
+	} else {
+		//fmt.Println(string(buffer[0:n]))
 	}
-	for _, service := range probe.Services {
-		if len(service.Reg) == 0 {
-			continue
-		}
-		reg, err := regexp2.Compile(service.Reg, 0)
-		if err != nil {
-			continue
-		}
-		if m, _ := reg.FindStringMatch(string(buffer[0:n])); m != nil { //TODO fix here.
-			fmt.Println(port, service.Name, service.Reg, "\t", probe.HelloString)
-			//for _, i := range m.Groups()[1:] {
-			//	fmt.Println(i.String())
-			//}
-		}
-		for _, service := range DefaultServices { // FIXME merge two to one
-			if len(service.Reg) == 0 {
-				continue
-			}
-			reg, err := regexp2.Compile(service.Reg, 0) // TODO 可以优化掉，不用每次都重新编译
-			if err != nil {
-				continue
-			}
-			if m, _ := reg.FindStringMatch(string(buffer[0:n])); m != nil { //TODO fix here.
-				fmt.Println("Port:", port, "Service: ", service.Name, service.Reg)
-			}
-		}
-		//fmt.Println("Get Response", string(buffer[0:n]))
-	}
+	return buffer[0:n], nil
 }
 
-func DetectProbe(ip, port string, probe Probe, DefaultServices []Service, wg *sync.WaitGroup) {
+func DetectProbe(ip, port string, probe Probe, conn chan []byte, wg *sync.WaitGroup) {
 	defer wg.Done()
-	detectProbe(ip, port, probe, DefaultServices)
+	//fmt.Println("Begin ", probe.ProbName, port)
+	rtn, err := detectProbe(ip, port, probe)
+
+	if err == nil {
+		if rtn != nil {
+			conn <- rtn
+			//fmt.Println(string(rtn))
+		}
+		for _, service := range probe.Services {
+			if len(rtn) > 0 && service.Reg != nil {
+				if isMatch, _ := service.Reg.MatchString(string(rtn)); isMatch {
+					fmt.Println("Result-->", service.Name, service.ServiceInfo)
+				}
+			}
+		}
+	}
 }
 func IntInSlice(a int, list []int) bool {
 	for _, b := range list {
@@ -133,20 +123,52 @@ func IntInSlice(a int, list []int) bool {
 	}
 	return false
 }
+func defaultServiceParser(defaultServiceParserConn chan []byte, prob Probe) {
+	allBannersSet := mapset.NewSet()
+	allBanners := [][]byte{}
+	for ; len(defaultServiceParserConn) > 0; {
+		buffer := <-defaultServiceParserConn
+		if !allBannersSet.Contains(string(buffer)) {
+			allBannersSet.Add(string(buffer))
+			allBanners = append(allBanners, buffer)
+			//fmt.Println("add -->", string(buffer))
+		} else {
+
+		}
+	}
+
+	for _, i := range allBanners {
+		//fmt.Println(string(i))
+		for _, service := range prob.Services {
+			if len(i) > 0 && service.Reg != nil {
+				if isMatch, _ := service.Reg.MatchString(string(i)); isMatch {
+					fmt.Println("Result-->", service.Name, service.ServiceInfo)
+				}
+			}
+		}
+	}
+}
 func RockIT() {
 	probs, _ := ParseNmapServiceProbes("nmap-service-probes.txt")
 	wg := sync.WaitGroup{}
-	port_list := []string{"22", "80", "9929", "31337"}
-	//port_list := []string{"22"}
+	port_list := []string{"22", "53", "443", "80", "2002"}
+	//port_list := []string{"8080"}
+	var defaultServiceParserConn = make(chan []byte, 1024)
+	//fmt.Println("Begain run")
 	for _, i := range probs {
 		if len(i.HelloString) > 0 {
 			for _, j := range port_list {
-				wg.Add(1)
-				go DetectProbe("45.33.32.156", j, i, probs[0].Services, &wg)
+				go func(ip, port string, probe Probe, conn chan []byte, wg *sync.WaitGroup) {
+					//fmt.Println(ip, port, probe.ProbName, probe.HelloString)
+					wg.Add(1)
+					DetectProbe(ip, port, probe, conn, wg)
+				}("139.199.5.115", j, i, defaultServiceParserConn, &wg)
 			}
 		} else {
 			//fmt.Println(i.HelloString, i.ProbName, "skip")
 		}
 	}
 	wg.Wait()
+	fmt.Println("detect End")
+	defaultServiceParser(defaultServiceParserConn, probs[0])
 }

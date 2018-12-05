@@ -21,10 +21,10 @@ type Probe struct {
 }
 
 type Service struct {
-	MatchType string `json:"match_type"`
-	Name      string `json:"name"`
-	//	Reg       *regexp2.Regexp `json:"reg"`
-	Reg         string `json:"reg"`
+	MatchType string          `json:"match_type"`
+	Name      string          `json:"name"`
+	Reg       *regexp2.Regexp `json:"reg"`
+	//Reg         string `json:"reg"`
 	ServiceInfo string `json:"service_info"` // service info, such as cpe/version info from regexp.
 }
 
@@ -46,12 +46,13 @@ func GenService(line string) (service Service, err error) { // 给一个 match/s
 	}
 	service.MatchType = result[1]
 	service.Name = result[2]
-	_, err = regexp2.Compile(result[4], 0)
+	reg, err := regexp2.Compile(result[4], 0)
 	if err != nil {
 		//fmt.Println(err)
 		return service, errors.New("gen regexp failed.")
 	}
-	service.Reg = result[4]
+	//service.Reg = result[4]
+	service.Reg = reg
 	service.ServiceInfo = result[len(result)-1]
 	return service, nil
 }
@@ -161,7 +162,7 @@ func ParseNmapServiceProbes(path string) ([]Probe, error) {
 			if strings.HasPrefix(lines[i], "#") || len(lines[i]) == 0 {
 				i++
 			} else {
-				fmt.Println("do not know what the fuck is:", lines[i])
+				//fmt.Println("do not know what the fuck is:", lines[i])
 				i++
 			}
 		}

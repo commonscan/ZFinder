@@ -1,0 +1,31 @@
+# Created by .ignore support plugin (hsz.mobi)
+### Go template
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+.idea/
+dump.rdb
+nmap-service-probes.txt
+out.json
+small_text.txt
+vendor/github.com/dlclark/regexp2/.gitignore
+vendor/github.com/dlclark/regexp2/.travis.yml
+vendor/github.com/dlclark/regexp2/ATTRIB
+vendor/github.com/dlclark/regexp2/LICENSE
+vendor/github.com/dlclark/regexp2/README.md
+vendor/github.com/dlclark/regexp2/match.go
+vendor/github.com/dlclark/regexp2/regexp.go
+vendor/github.com/dlclark/regexp2/replace.go
+vendor/github.com/dlclark/regexp2/runner.go
+vendor/github.com/dlclark/regexp2/syntax/
+vendor/github.com/dlclark/regexp2/testoutput1
